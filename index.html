@@ -1,0 +1,878 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>OGIM — Nigeria Oil & Gas Infrastructure</title>
+<link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Barlow+Condensed:wght@300;400;600;700&family=Barlow:wght@300;400&display=swap" rel="stylesheet" />
+<link href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css" rel="stylesheet" />
+<script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
+<style>
+  :root {
+    --bg:      #0a0c0f;
+    --panel:   #0f1318;
+    --border:  #1e2530;
+    --border2: #2a3545;
+    --amber:   #f5a623;
+    --red:     #e84040;
+    --green:   #39d98a;
+    --muted:   #4a5568;
+    --text:    #c8d4e0;
+    --text2:   #8899aa;
+    --mono:    'Share Tech Mono', monospace;
+    --sans:    'Barlow Condensed', sans-serif;
+    --body:    'Barlow', sans-serif;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; overflow: hidden; }
+
+  body {
+    background: var(--bg); color: var(--text);
+    font-family: var(--body); display: flex; flex-direction: column;
+  }
+
+  /* TOPBAR */
+  #topbar {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 0 20px; height: 52px; background: var(--panel);
+    border-bottom: 1px solid var(--border); flex-shrink: 0; z-index: 100;
+  }
+  .logo { display: flex; align-items: center; gap: 12px; }
+  .logo-mark {
+    width: 32px; height: 32px; background: var(--amber);
+    clip-path: polygon(50% 0%,100% 25%,100% 75%,50% 100%,0% 75%,0% 25%);
+    display: flex; align-items: center; justify-content: center;
+    font-family: var(--mono); font-size: 11px; color: #000; font-weight: bold;
+  }
+  .logo-text { font-family: var(--sans); font-weight: 700; font-size: 18px; letter-spacing: 3px; color: var(--amber); }
+  .logo-sub  { font-family: var(--mono); font-size: 10px; color: var(--text2); letter-spacing: 1px; margin-top: 1px; }
+  .topbar-right { display: flex; align-items: center; gap: 20px; }
+  .status-pill {
+    font-family: var(--mono); font-size: 10px; color: var(--green);
+    border: 1px solid var(--green); padding: 3px 10px; letter-spacing: 1px;
+    display: flex; align-items: center; gap: 6px; transition: all 0.3s;
+  }
+  .status-pill.error { color: var(--red); border-color: var(--red); }
+  .status-dot { width: 6px; height: 6px; background: var(--green); border-radius: 50%; animation: blink 2s infinite; }
+  .status-pill.error .status-dot { background: var(--red); }
+  @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.3} }
+  .coord-display { font-family: var(--mono); font-size: 10px; color: var(--text2); min-width: 230px; text-align: right; }
+
+  /* MAIN */
+  #main { flex: 1; display: flex; overflow: hidden; }
+
+  /* SIDEBAR */
+  #sidebar {
+    width: 280px; background: var(--panel); border-right: 1px solid var(--border);
+    display: flex; flex-direction: column; overflow: hidden; flex-shrink: 0;
+  }
+  .sec-head {
+    padding: 10px 16px; font-family: var(--sans); font-weight: 600;
+    font-size: 11px; letter-spacing: 2px; text-transform: uppercase;
+    color: var(--text2); border-bottom: 1px solid var(--border); flex-shrink: 0;
+  }
+
+  /* SEARCH */
+  .search-box { padding: 10px 16px 6px; display: flex; flex-direction: column; gap: 6px; }
+  .search-row { display: flex; gap: 6px; align-items: center; }
+  .search-label { font-family: var(--mono); font-size: 10px; color: var(--text2); white-space: nowrap; }
+  .sinput {
+    flex: 1; background: var(--bg); border: 1px solid var(--border2);
+    color: var(--text); font-family: var(--mono); font-size: 11px;
+    padding: 6px 10px; outline: none; letter-spacing: 0.5px;
+    transition: border-color 0.2s; width: 100%;
+  }
+  .sinput::placeholder { color: var(--muted); }
+  .sinput:focus { border-color: var(--amber); }
+
+  #search-results {
+    margin: 0 16px 8px; max-height: 190px; overflow-y: auto;
+    scrollbar-width: thin; scrollbar-color: var(--border2) transparent;
+  }
+  .result-item {
+    padding: 7px 10px; border-left: 2px solid transparent; cursor: pointer;
+    font-family: var(--mono); font-size: 10px; color: var(--text2);
+    transition: all 0.15s; border-bottom: 1px solid var(--border);
+  }
+  .result-item:hover { background: rgba(245,166,35,0.08); border-left-color: var(--amber); color: var(--text); }
+  .result-name { font-size: 11px; color: var(--text); margin-bottom: 2px; }
+  .result-meta { color: var(--muted); }
+  .msg-box { font-family: var(--mono); font-size: 10px; color: var(--muted); padding: 10px; text-align: center; letter-spacing: 1px; }
+
+  /* LAYERS */
+  .layers-scroll { flex: 1; overflow-y: auto; padding: 4px 16px 12px; scrollbar-width: thin; scrollbar-color: var(--border2) transparent; }
+  .layer-item {
+    display: flex; align-items: center; gap: 10px; padding: 9px 0;
+    border-bottom: 1px solid rgba(255,255,255,0.04); cursor: pointer; transition: opacity 0.2s;
+  }
+  .layer-item:last-child { border-bottom: none; }
+  .layer-item.off { opacity: 0.4; }
+  .layer-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+  .layer-dot.is-line { border-radius: 0; height: 3px; width: 16px; }
+  .layer-name { flex: 1; font-family: var(--sans); font-size: 13px; letter-spacing: 0.5px; color: var(--text); }
+  .layer-count { font-family: var(--mono); font-size: 10px; color: var(--muted); background: var(--bg); padding: 2px 6px; }
+  .layer-count.loading { color: var(--amber); }
+  .layer-count.err { color: var(--red); }
+  .toggle { width: 28px; height: 15px; background: var(--border2); border-radius: 8px; position: relative; transition: background 0.2s; flex-shrink: 0; }
+  .toggle.on { background: var(--amber); }
+  .toggle::after { content:''; position:absolute; width:11px; height:11px; background:#fff; border-radius:50%; top:2px; left:2px; transition:left 0.2s; }
+  .toggle.on::after { left: 15px; }
+
+  /* MAP */
+  #map-wrap { flex: 1; position: relative; overflow: hidden; }
+  #map { position: absolute; inset: 0; }
+  #map::after {
+    content:''; position:absolute; inset:0; pointer-events:none; z-index:1;
+    background: repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(0,0,0,0.03) 2px,rgba(0,0,0,0.03) 4px);
+  }
+
+  /* LOADING */
+  #loading {
+    position: absolute; inset: 0; background: var(--bg);
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    z-index: 999; gap: 18px; transition: opacity 0.5s;
+  }
+  #loading.done { opacity: 0; pointer-events: none; }
+  .load-title { font-family: var(--sans); font-weight: 700; font-size: 34px; letter-spacing: 8px; color: var(--amber); }
+  .load-track { width: 260px; height: 2px; background: var(--border2); overflow: hidden; }
+  .load-bar   { height: 100%; background: var(--amber); width: 0; transition: width 0.3s; }
+  .load-msg   { font-family: var(--mono); font-size: 11px; color: var(--text2); letter-spacing: 1px; }
+
+  /* POPUP */
+  .maplibregl-popup-content {
+    background: var(--panel) !important; border: 1px solid var(--amber) !important;
+    border-radius: 0 !important; padding: 0 !important;
+    box-shadow: 0 0 24px rgba(245,166,35,0.18) !important;
+    min-width: 220px; max-width: 300px;
+  }
+  .maplibregl-popup-tip { border-top-color: var(--amber) !important; }
+  .maplibregl-popup-close-button { color: var(--text2) !important; font-size: 16px !important; padding: 6px 10px !important; background: none !important; }
+  .p-head { background: rgba(245,166,35,0.08); border-bottom: 1px solid var(--border); padding: 8px 14px; }
+  .p-badge { font-family: var(--mono); font-size: 9px; letter-spacing: 1px; padding: 2px 7px; text-transform: uppercase; display: inline-block; }
+  .p-title { padding: 7px 14px 5px; font-family: var(--sans); font-weight: 600; font-size: 14px; color: var(--amber); border-bottom: 1px solid var(--border); }
+  .p-body  { padding: 6px 14px 10px; max-height: 240px; overflow-y: auto; scrollbar-width: thin; scrollbar-color: var(--border2) transparent; }
+  .p-row   { display: flex; gap: 8px; padding: 4px 0; border-bottom: 1px solid rgba(255,255,255,0.04); font-size: 11px; }
+  .p-key   { font-family: var(--mono); color: var(--text2); min-width: 90px; flex-shrink: 0; font-size: 10px; }
+  .p-val   { color: var(--text); word-break: break-all; }
+
+  /* BOTTOMBAR */
+  #bottombar {
+    height: 28px; background: var(--panel); border-top: 1px solid var(--border);
+    display: flex; align-items: center; padding: 0 16px; gap: 24px; flex-shrink: 0;
+  }
+  .bs { font-family: var(--mono); font-size: 10px; color: var(--text2); display: flex; align-items: center; gap: 5px; }
+  .bs b { color: var(--amber); font-weight: normal; }
+
+  /* MapLibre controls */
+  .maplibregl-ctrl-group { background: var(--panel) !important; border: 1px solid var(--border2) !important; border-radius: 0 !important; }
+  .maplibregl-ctrl-group button { background: transparent !important; color: var(--text2) !important; border-bottom: 1px solid var(--border) !important; }
+  .maplibregl-ctrl-group button:hover { background: rgba(245,166,35,0.1) !important; color: var(--amber) !important; }
+
+  ::-webkit-scrollbar { width: 4px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--border2); }
+
+  /* BASEMAP SWITCHER */
+  .bm-switcher {
+    display: flex; align-items: center; gap: 0;
+    border: 1px solid var(--border2); overflow: hidden;
+  }
+
+  .bm-btn {
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    gap: 2px; padding: 5px 11px; cursor: pointer;
+    background: transparent; border: none; border-right: 1px solid var(--border2);
+    color: var(--text2); transition: all 0.18s; position: relative;
+    font-family: var(--mono); font-size: 9px; letter-spacing: 0.5px;
+    text-transform: uppercase; min-width: 58px;
+  }
+
+  .bm-btn:last-child { border-right: none; }
+
+  .bm-btn:hover { background: rgba(255,255,255,0.04); color: var(--text); }
+
+  .bm-btn.active {
+    background: rgba(245,166,35,0.12);
+    color: var(--amber);
+  }
+
+  .bm-btn.active::after {
+    content: '';
+    position: absolute; bottom: 0; left: 0; right: 0;
+    height: 2px; background: var(--amber);
+  }
+
+  .bm-icon {
+    width: 22px; height: 16px; border-radius: 2px;
+    border: 1px solid currentColor; opacity: 0.7;
+    overflow: hidden; flex-shrink: 0;
+  }
+
+  /* mini preview thumbnails */
+  .bm-icon.dark {
+    background: #1a1f2e;
+    background-image:
+      linear-gradient(rgba(255,255,255,0.07) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255,255,255,0.07) 1px, transparent 1px);
+    background-size: 6px 6px;
+  }
+
+  .bm-icon.satellite {
+    background: #1a3020;
+    background-image:
+      radial-gradient(circle at 30% 40%, #2d5a3d 30%, transparent 60%),
+      radial-gradient(circle at 70% 60%, #3a6b4a 30%, transparent 60%);
+  }
+
+  .bm-icon.street {
+    background: #2a2a35;
+    background-image:
+      linear-gradient(rgba(200,200,200,0.15) 2px, transparent 2px),
+      linear-gradient(90deg, rgba(200,200,200,0.15) 2px, transparent 2px);
+    background-size: 8px 8px;
+  }
+</style>
+</head>
+<body>
+
+<div id="topbar">
+  <div class="logo">
+    <div class="logo-mark">NG</div>
+    <div>
+      <div class="logo-text">OGIM</div>
+      <div class="logo-sub">NIGERIA OIL &amp; GAS INFRASTRUCTURE MAP</div>
+    </div>
+  </div>
+  <div class="topbar-right">
+    <div class="status-pill" id="db-status">
+      <div class="status-dot"></div>
+      <span id="db-status-text">CONNECTING...</span>
+    </div>
+
+    <!-- BASEMAP SWITCHER -->
+    <div class="bm-switcher">
+      <button class="bm-btn active" data-bm="dark" onclick="switchBasemap('dark')">
+        <div class="bm-icon dark"></div>
+        Dark
+      </button>
+      <button class="bm-btn" data-bm="satellite" onclick="switchBasemap('satellite')">
+        <div class="bm-icon satellite"></div>
+        Satellite
+      </button>
+      <button class="bm-btn" data-bm="street" onclick="switchBasemap('street')">
+        <div class="bm-icon street"></div>
+        Street
+      </button>
+    </div>
+
+    <div class="coord-display" id="coord-display">LAT —&nbsp;&nbsp;&nbsp;LNG —</div>
+  </div>
+</div>
+
+<div id="main">
+  <div id="sidebar">
+
+    <div class="sidebar-section" style="border-bottom:1px solid var(--border);">
+      <div class="sec-head">🔍 Search</div>
+      <div class="search-box">
+        <div class="search-row">
+          <span class="search-label">FIELD</span>
+          <input class="sinput" id="search-field" value="name" style="max-width:130px;" />
+        </div>
+        <input class="sinput" id="search-input" placeholder="type to search..." />
+      </div>
+      <div id="search-results"></div>
+    </div>
+
+    <div style="display:flex;flex-direction:column;flex:1;overflow:hidden;">
+      <div class="sec-head">⬡ Layers</div>
+      <div class="layers-scroll" id="layer-list"></div>
+    </div>
+
+  </div>
+
+  <div id="map-wrap">
+    <div id="map"></div>
+    <div id="loading">
+      <div class="load-title">OGIM</div>
+      <div class="load-track"><div class="load-bar" id="load-bar"></div></div>
+      <div class="load-msg" id="load-msg">INITIALIZING...</div>
+    </div>
+  </div>
+</div>
+
+<div id="bottombar">
+  <div class="bs">TOTAL <b id="s-total">—</b></div>
+  <div class="bs">VISIBLE <b id="s-visible">—</b></div>
+  <div class="bs">ZOOM <b id="s-zoom">—</b></div>
+  <div class="bs" style="margin-left:auto;color:var(--muted);">  ADE · MAPLIBRE GL · OGIM</div>
+</div>
+
+<script>
+'use strict';
+
+// ── CONFIG ─────────────────────────────────────────────────────────────────
+const API_BASE = 'http://localhost:3000';
+
+const FILE_TO_LAYER = {
+  'NG_OGIM_pipelines.geojson':           'pipelines',
+  'NG_OGIM_lng_facilities.geojson':      'lng_facilities',
+  'NG_OGIM_refineries.geojson':          'refineries',
+  'NG_OGIM_wells.geojson':               'wells',
+  'NG_OGIM_compressor_stations.geojson': 'compressor_stations',
+  'NG_OGIM_flaring_detections.geojson':  'flaring_detections',
+  'NG_OGIM_petroleum_terminals.geojson': 'petroleum_terminals',
+};
+
+const LAYERS = [
+  { id: 'pipelines',           label: 'Pipelines',           color: '#f5a623', type: 'line',   width: 2  },
+  { id: 'wells',               label: 'Wells',               color: '#00d4ff', type: 'symbol', icon: 'icon-wells'               },
+  { id: 'refineries',          label: 'Refineries',          color: '#e84040', type: 'symbol', icon: 'icon-refineries'          },
+  { id: 'lng_facilities',      label: 'LNG Facilities',      color: '#39d98a', type: 'symbol', icon: 'icon-lng_facilities'      },
+  { id: 'compressor_stations', label: 'Compressor Stations', color: '#b794f4', type: 'symbol', icon: 'icon-compressor_stations' },
+  { id: 'flaring_detections',  label: 'Flaring Detections',  color: '#fc8c4a', type: 'symbol', icon: 'icon-flaring_detections'  },
+  { id: 'petroleum_terminals', label: 'Petroleum Terminals', color: '#f687b3', type: 'symbol', icon: 'icon-petroleum_terminals' },
+];
+
+// ── SVG ICON DEFINITIONS ───────────────────────────────────────────────────
+// Each returns an SVG string for a 40x40 canvas; color is injected at runtime
+const ICON_SVGS = {
+  // Oil well derrick
+  'icon-wells': (c) => `<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 40 40">
+    <circle cx="20" cy="20" r="19" fill="${c}22" stroke="${c}" stroke-width="1.2"/>
+    <!-- derrick triangle -->
+    <polygon points="20,6 10,30 30,30" fill="none" stroke="${c}" stroke-width="1.8" stroke-linejoin="round"/>
+    <!-- crossbars -->
+    <line x1="13" y1="22" x2="27" y2="22" stroke="${c}" stroke-width="1.2"/>
+    <line x1="15.5" y1="16" x2="24.5" y2="16" stroke="${c}" stroke-width="1.2"/>
+    <!-- base platform -->
+    <line x1="8" y1="30" x2="32" y2="30" stroke="${c}" stroke-width="2"/>
+    <!-- shaft down -->
+    <line x1="20" y1="30" x2="20" y2="34" stroke="${c}" stroke-width="2"/>
+  </svg>`,
+
+  // Refinery — distillation tower
+  'icon-refineries': (c) => `<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 40 40">
+    <circle cx="20" cy="20" r="19" fill="${c}22" stroke="${c}" stroke-width="1.2"/>
+    <!-- main tower -->
+    <rect x="16" y="8" width="8" height="20" rx="1" fill="${c}44" stroke="${c}" stroke-width="1.5"/>
+    <!-- top cap -->
+    <rect x="14" y="6" width="12" height="3" rx="1" fill="${c}" />
+    <!-- pipe out left -->
+    <line x1="16" y1="16" x2="10" y2="16" stroke="${c}" stroke-width="1.5"/>
+    <line x1="10" y1="16" x2="10" y2="22" stroke="${c}" stroke-width="1.5"/>
+    <!-- pipe out right -->
+    <line x1="24" y1="20" x2="30" y2="20" stroke="${c}" stroke-width="1.5"/>
+    <line x1="30" y1="20" x2="30" y2="26" stroke="${c}" stroke-width="1.5"/>
+    <!-- base -->
+    <line x1="13" y1="28" x2="27" y2="28" stroke="${c}" stroke-width="2"/>
+    <line x1="15" y1="28" x2="15" y2="32" stroke="${c}" stroke-width="1.5"/>
+    <line x1="25" y1="28" x2="25" y2="32" stroke="${c}" stroke-width="1.5"/>
+    <!-- flame on top -->
+    <ellipse cx="20" cy="4" rx="2.5" ry="2" fill="${c}" opacity="0.9"/>
+  </svg>`,
+
+  // LNG — snowflake + tank
+  'icon-lng_facilities': (c) => `<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 40 40">
+    <circle cx="20" cy="20" r="19" fill="${c}22" stroke="${c}" stroke-width="1.2"/>
+    <!-- storage tank -->
+    <rect x="12" y="18" width="16" height="12" rx="2" fill="${c}33" stroke="${c}" stroke-width="1.5"/>
+    <ellipse cx="20" cy="18" rx="8" ry="3" fill="${c}55" stroke="${c}" stroke-width="1.5"/>
+    <!-- snowflake -->
+    <line x1="20" y1="7" x2="20" y2="15" stroke="${c}" stroke-width="1.5"/>
+    <line x1="14" y1="9.5" x2="26" y2="12.5" stroke="${c}" stroke-width="1.5"/>
+    <line x1="14" y1="12.5" x2="26" y2="9.5" stroke="${c}" stroke-width="1.5"/>
+    <circle cx="20" cy="11" r="1.5" fill="${c}"/>
+  </svg>`,
+
+  // Compressor — gear/turbine
+  'icon-compressor_stations': (c) => `<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 40 40">
+    <circle cx="20" cy="20" r="19" fill="${c}22" stroke="${c}" stroke-width="1.2"/>
+    <!-- outer gear ring -->
+    <circle cx="20" cy="20" r="11" fill="none" stroke="${c}" stroke-width="1.5" stroke-dasharray="4 2"/>
+    <!-- inner circle -->
+    <circle cx="20" cy="20" r="5" fill="${c}44" stroke="${c}" stroke-width="1.5"/>
+    <!-- center dot -->
+    <circle cx="20" cy="20" r="2" fill="${c}"/>
+    <!-- spokes -->
+    <line x1="20" y1="9" x2="20" y2="14" stroke="${c}" stroke-width="2"/>
+    <line x1="20" y1="26" x2="20" y2="31" stroke="${c}" stroke-width="2"/>
+    <line x1="9"  y1="20" x2="14" y2="20" stroke="${c}" stroke-width="2"/>
+    <line x1="26" y1="20" x2="31" y2="20" stroke="${c}" stroke-width="2"/>
+    <line x1="12.2" y1="12.2" x2="15.8" y2="15.8" stroke="${c}" stroke-width="2"/>
+    <line x1="24.2" y1="24.2" x2="27.8" y2="27.8" stroke="${c}" stroke-width="2"/>
+    <line x1="27.8" y1="12.2" x2="24.2" y2="15.8" stroke="${c}" stroke-width="2"/>
+    <line x1="15.8" y1="24.2" x2="12.2" y2="27.8" stroke="${c}" stroke-width="2"/>
+  </svg>`,
+
+  // Flaring — flame
+  'icon-flaring_detections': (c) => `<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 40 40">
+    <circle cx="20" cy="20" r="19" fill="${c}22" stroke="${c}" stroke-width="1.2"/>
+    <!-- flame shape -->
+    <path d="M20 8 C16 12 12 16 13 21 C14 25 17 27 20 27 C23 27 26 25 27 21 C28 16 24 12 20 8Z"
+          fill="${c}55" stroke="${c}" stroke-width="1.5" stroke-linejoin="round"/>
+    <!-- inner flame -->
+    <path d="M20 14 C18 17 17 19 18 22 C18.5 24 19.2 25 20 25 C20.8 25 21.5 24 22 22 C23 19 22 17 20 14Z"
+          fill="${c}" opacity="0.8"/>
+    <!-- base pipe -->
+    <rect x="17" y="27" width="6" height="5" rx="1" fill="${c}66" stroke="${c}" stroke-width="1.2"/>
+    <line x1="14" y1="32" x2="26" y2="32" stroke="${c}" stroke-width="1.5"/>
+  </svg>`,
+
+  // Petroleum terminal — storage tanks top view
+  'icon-petroleum_terminals': (c) => `<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 40 40">
+    <circle cx="20" cy="20" r="19" fill="${c}22" stroke="${c}" stroke-width="1.2"/>
+    <!-- large tank -->
+    <circle cx="17" cy="18" r="7" fill="${c}33" stroke="${c}" stroke-width="1.5"/>
+    <circle cx="17" cy="18" r="3" fill="${c}66" stroke="${c}" stroke-width="1"/>
+    <!-- small tank -->
+    <circle cx="28" cy="26" r="5" fill="${c}33" stroke="${c}" stroke-width="1.5"/>
+    <circle cx="28" cy="26" r="2" fill="${c}66" stroke="${c}" stroke-width="1"/>
+    <!-- connecting pipe -->
+    <line x1="23" y1="21" x2="24" y2="22" stroke="${c}" stroke-width="1.5"/>
+    <!-- jetty/dock -->
+    <line x1="10" y1="28" x2="10" y2="34" stroke="${c}" stroke-width="1.5"/>
+    <line x1="8"  y1="34" x2="14" y2="34" stroke="${c}" stroke-width="1.5"/>
+    <line x1="8"  y1="28" x2="14" y2="28" stroke="${c}" stroke-width="1.5"/>
+  </svg>`,
+};
+
+// Convert SVG string → HTMLImageElement → map.addImage()
+function loadSVGIcon(name, svgStr) {
+  return new Promise((resolve) => {
+    const blob = new Blob([svgStr], { type: 'image/svg+xml' });
+    const url  = URL.createObjectURL(blob);
+    const img  = new Image(40, 40);
+    img.onload = () => {
+      map.addImage(name, img, { pixelRatio: 2 });
+      URL.revokeObjectURL(url);
+      resolve();
+    };
+    img.src = url;
+  });
+}
+
+// Register all icons into MapLibre after map loads
+async function registerIcons() {
+  const promises = LAYERS
+    .filter(l => l.type === 'symbol' && ICON_SVGS[l.icon])
+    .map(l => loadSVGIcon(l.icon, ICON_SVGS[l.icon](l.color)));
+  await Promise.all(promises);
+}
+
+// ── STATE ──────────────────────────────────────────────────────────────────
+const layerData       = {};
+const layerVisibility = {};
+const layerStatus     = {};   // 'loading' | 'ok' | 'empty' | 'error'
+let map;
+
+// ── LOADING UI ─────────────────────────────────────────────────────────────
+function setLoad(pct, msg) {
+  document.getElementById('load-bar').style.width = pct + '%';
+  document.getElementById('load-msg').textContent = msg;
+}
+
+function hideLoad() {
+  const el = document.getElementById('loading');
+  el.classList.add('done');
+  setTimeout(() => el.remove(), 600);
+}
+
+// ── HEALTH CHECK ───────────────────────────────────────────────────────────
+async function checkHealth() {
+  try {
+    const res  = await fetch(`${API_BASE}/health`);
+    const data = await res.json();
+    if (data.status === 'ok') {
+      document.getElementById('db-status-text').textContent = ' CONNECTED';
+    } else throw new Error();
+  } catch {
+    const pill = document.getElementById('db-status');
+    pill.classList.add('error');
+    document.getElementById('db-status-text').textContent = 'API OFFLINE';
+  }
+}
+
+// ── MAP INIT ───────────────────────────────────────────────────────────────
+function initMap() {
+  map = new maplibregl.Map({
+    container: 'map',
+    style: {
+      version: 8,
+      glyphs: 'https://demotiles.maplibre.org/font/{fontstack}/{range}.pbf',
+      sources: {
+        carto: {
+          type: 'raster',
+          tiles: [
+            'https://a.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}@2x.png',
+            'https://b.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}@2x.png',
+          ],
+          tileSize: 256,
+          attribution: '© OpenStreetMap © CARTO',
+        },
+      },
+      layers: [{ id: 'base', type: 'raster', source: 'carto' }],
+    },
+    center: [8.0, 6.0],
+    zoom: 5.5,
+    attributionControl: false,
+  });
+
+  map.addControl(new maplibregl.NavigationControl(), 'bottom-right');
+  map.addControl(new maplibregl.ScaleControl({ unit: 'metric' }), 'bottom-left');
+
+  map.on('mousemove', (e) => {
+    document.getElementById('coord-display').textContent =
+      `LAT ${e.lngLat.lat.toFixed(5)}   LNG ${e.lngLat.lng.toFixed(5)}`;
+  });
+
+  const onZoom = () => {
+    document.getElementById('s-zoom').textContent = map.getZoom().toFixed(1);
+  };
+  map.on('zoom', onZoom);
+  onZoom();
+}
+
+// ── FETCH LAYER ─────────────────────────────────────────────────────────────
+async function fetchLayer(layer) {
+  layerStatus[layer.id] = 'loading';
+  try {
+    const res = await fetch(`${API_BASE}/api/layers/${layer.id}`);
+    if (res.status === 404) {
+      layerStatus[layer.id] = 'empty';
+      return null;
+    }
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+
+    const geojson = await res.json();
+    layerData[layer.id]   = geojson;
+    layerStatus[layer.id] = geojson.features.length > 0 ? 'ok' : 'empty';
+    return geojson;
+  } catch (e) {
+    console.warn(`[${layer.id}] fetch error:`, e.message);
+    layerStatus[layer.id] = 'error';
+    return null;
+  }
+}
+
+// ── ADD LAYER TO MAP ────────────────────────────────────────────────────────
+function addLayerToMap(layer, geojson) {
+  if (!geojson || !geojson.features.length) return;
+
+  // Clean up if re-adding
+  ['lyr-' + layer.id + '-glow', 'lyr-' + layer.id + '-halo', 'lyr-' + layer.id].forEach(id => {
+    if (map.getLayer(id)) map.removeLayer(id);
+  });
+  if (map.getSource('src-' + layer.id)) map.removeSource('src-' + layer.id);
+
+  map.addSource('src-' + layer.id, { type: 'geojson', data: geojson });
+
+  if (layer.type === 'line') {
+    // Glow line underneath
+    map.addLayer({
+      id: 'lyr-' + layer.id + '-glow',
+      type: 'line',
+      source: 'src-' + layer.id,
+      paint: {
+        'line-color': layer.color,
+        'line-width': ['interpolate',['linear'],['zoom'], 4, 3, 10, 6, 14, 10],
+        'line-opacity': 0.12,
+        'line-blur': 4,
+      },
+    });
+    // Main line
+    map.addLayer({
+      id: 'lyr-' + layer.id,
+      type: 'line',
+      source: 'src-' + layer.id,
+      paint: {
+        'line-color': layer.color,
+        'line-width': ['interpolate',['linear'],['zoom'], 4, 1, 10, layer.width || 2, 14, (layer.width||2)*2],
+        'line-opacity': 0.88,
+      },
+    });
+  } else if (layer.type === 'symbol') {
+    // Glow halo circle under icon
+    map.addLayer({
+      id: 'lyr-' + layer.id + '-halo',
+      type: 'circle',
+      source: 'src-' + layer.id,
+      paint: {
+        'circle-radius': ['interpolate',['linear'],['zoom'], 4, 8, 10, 14, 16, 22],
+        'circle-color': layer.color,
+        'circle-opacity': 0.10,
+        'circle-blur': 1,
+      },
+    });
+    // SVG icon symbol
+    map.addLayer({
+      id: 'lyr-' + layer.id,
+      type: 'symbol',
+      source: 'src-' + layer.id,
+      layout: {
+        'icon-image': layer.icon,
+        'icon-size': ['interpolate',['linear'],['zoom'], 4, 0.45, 10, 0.75, 16, 1.2],
+        'icon-allow-overlap': true,
+        'icon-ignore-placement': true,
+      },
+    });
+  }
+
+  // Popup on click
+  map.on('click', 'lyr-' + layer.id, (e) => {
+    const feat = e.features[0];
+    if (!feat) return;
+
+    const props = feat.properties || {};
+
+    // Determine lngLat
+    let lngLat;
+    if (feat.geometry.type === 'Point') {
+      lngLat = { lng: feat.geometry.coordinates[0], lat: feat.geometry.coordinates[1] };
+    } else {
+      lngLat = e.lngLat;
+    }
+
+    const name = props.name || props.NAME || props.facility_name ||
+                 props.well_name || props.operator || layer.label;
+
+    const rows = Object.entries(props)
+      .filter(([k, v]) => !k.startsWith('_') && v !== null && v !== '' && v !== undefined)
+      .slice(0, 25)
+      .map(([k, v]) => `
+        <div class="p-row">
+          <div class="p-key">${k}</div>
+          <div class="p-val">${typeof v === 'object' ? JSON.stringify(v) : v}</div>
+        </div>`).join('');
+
+    new maplibregl.Popup({ maxWidth: '320px', closeButton: true })
+      .setLngLat(lngLat)
+      .setHTML(`
+        <div class="p-head">
+          <div class="p-badge" style="background:${layer.color}22;color:${layer.color};border:1px solid ${layer.color}55;">
+            ${layer.label}
+          </div>
+        </div>
+        <div class="p-title">${name}</div>
+        <div class="p-body">${rows || '<div class="msg-box">NO PROPERTIES</div>'}</div>
+      `)
+      .addTo(map);
+  });
+
+  map.on('mouseenter', 'lyr-' + layer.id, () => map.getCanvas().style.cursor = 'crosshair');
+  map.on('mouseleave', 'lyr-' + layer.id, () => map.getCanvas().style.cursor = '');
+}
+
+// ── LAYER LIST ──────────────────────────────────────────────────────────────
+function renderLayers() {
+  const c = document.getElementById('layer-list');
+  c.innerHTML = '';
+
+  LAYERS.forEach(layer => {
+    const isOn   = layerVisibility[layer.id] !== false;
+    const status = layerStatus[layer.id];
+    const count  = layerData[layer.id]?.features?.length ?? 0;
+
+    let countLabel = '...';
+    let countClass = 'loading';
+    if (status === 'ok')    { countLabel = count.toLocaleString(); countClass = ''; }
+    if (status === 'empty') { countLabel = 'NO DATA'; countClass = 'err'; }
+    if (status === 'error') { countLabel = 'ERROR';   countClass = 'err'; }
+
+    const el = document.createElement('div');
+    el.className = 'layer-item' + (isOn ? '' : ' off');
+
+    // Build legend marker based on layer type
+    let legendHtml;
+    if (layer.type === 'line') {
+      legendHtml = `<div class="layer-dot is-line" style="background:${layer.color};box-shadow:0 0 6px ${layer.color}99;"></div>`;
+    } else if (ICON_SVGS && ICON_SVGS[layer.icon]) {
+      // Mini inline SVG icon
+      legendHtml = `<div class="layer-icon-wrap" style="width:20px;height:20px;flex-shrink:0;">${ICON_SVGS[layer.icon](layer.color).replace('width="40" height="40"','width="20" height="20"')}</div>`;
+    } else {
+      legendHtml = `<div class="layer-dot" style="background:${layer.color};box-shadow:0 0 7px ${layer.color}99;"></div>`;
+    }
+
+    el.innerHTML = `
+      ${legendHtml}
+      <div class="layer-name">${layer.label}</div>
+      <div class="layer-count ${countClass}">${countLabel}</div>
+      <div class="toggle${isOn ? ' on' : ''}"></div>`;
+
+    el.addEventListener('click', () => {
+      if (status === 'empty' || status === 'error') return;
+      layerVisibility[layer.id] = !isOn;
+      const vis = layerVisibility[layer.id] ? 'visible' : 'none';
+      [layer.id, layer.id + '-glow'].forEach(id => {
+        if (map.getLayer('lyr-' + id))
+          map.setLayoutProperty('lyr-' + id, 'visibility', vis);
+      });
+      renderLayers();
+      updateStats();
+    });
+
+    c.appendChild(el);
+  });
+
+  updateStats();
+}
+
+function updateStats() {
+  let total = 0, visible = 0;
+  LAYERS.forEach(l => {
+    const n = layerData[l.id]?.features?.length || 0;
+    total += n;
+    if (layerVisibility[l.id] !== false) visible += n;
+  });
+  document.getElementById('s-total').textContent   = total.toLocaleString();
+  document.getElementById('s-visible').textContent = visible.toLocaleString();
+}
+
+// ── SEARCH ──────────────────────────────────────────────────────────────────
+let searchTimer;
+document.getElementById('search-input').addEventListener('input', e => {
+  clearTimeout(searchTimer);
+  searchTimer = setTimeout(() => doSearch(e.target.value), 300);
+});
+
+async function doSearch(raw) {
+  const container = document.getElementById('search-results');
+  const field = document.getElementById('search-field').value.trim() || 'name';
+  const query = raw.trim();
+
+  if (query.length < 2) { container.innerHTML = ''; return; }
+
+  container.innerHTML = '<div class="msg-box">SEARCHING...</div>';
+
+  try {
+    const url = `${API_BASE}/api/search?q=${encodeURIComponent(query)}&field=${encodeURIComponent(field)}`;
+    const res = await fetch(url);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+
+    const geojson  = await res.json();
+    const features = geojson.features || [];
+
+    if (!features.length) {
+      container.innerHTML = `<div class="msg-box">NO RESULTS — "${query.toUpperCase()}"</div>`;
+      return;
+    }
+
+    const results = features.map(feat => {
+      const src   = feat.properties?._source || '';
+      const lid   = FILE_TO_LAYER[src] || src;
+      const layer = LAYERS.find(l => l.id === lid) || { label: lid, color: '#888' };
+      return { layer, feat, props: feat.properties || {} };
+    });
+
+    container.innerHTML = results.slice(0, 40).map((r, i) =>
+      `<div class="result-item" data-i="${i}">
+        <div class="result-name">${
+          r.props.name || r.props.NAME || r.props.facility_name ||
+          r.props.well_name || r.props.operator || `Feature ${i + 1}`
+        }</div>
+        <div class="result-meta">${r.layer.label}${r.props[field] ? ' · ' + r.props[field] : ''}</div>
+       </div>`
+    ).join('');
+
+    container.querySelectorAll('.result-item').forEach(el => {
+      el.addEventListener('click', () => {
+        const { feat } = results[+el.dataset.i];
+        const type = feat.geometry?.type;
+        if (!type) return;
+
+        let center;
+        if      (type === 'Point')           center = feat.geometry.coordinates;
+        else if (type === 'LineString')      center = feat.geometry.coordinates[Math.floor(feat.geometry.coordinates.length / 2)];
+        else if (type === 'MultiLineString') center = feat.geometry.coordinates[0][0];
+        else if (type === 'Polygon')         center = feat.geometry.coordinates[0][0];
+        else return;
+
+        map.flyTo({ center, zoom: 11, duration: 1400, essential: true });
+      });
+    });
+
+  } catch (e) {
+    container.innerHTML = `<div class="msg-box">ERROR: ${e.message}</div>`;
+  }
+}
+
+// ── BASEMAP CONFIG ──────────────────────────────────────────────────────────
+const BASEMAPS = {
+  dark: {
+    tiles: [
+      'https://a.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}@2x.png',
+      'https://b.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}@2x.png',
+    ],
+    attribution: '© OpenStreetMap © CARTO',
+  },
+  satellite: {
+    tiles: [
+      'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+    ],
+    attribution: '© Esri, Maxar, Earthstar Geographics',
+    tileSize: 256,
+  },
+  street: {
+    tiles: [
+      'https://a.tile.openstreetmap.org/{z}/{x}/{y}.png',
+      'https://b.tile.openstreetmap.org/{z}/{x}/{y}.png',
+    ],
+    attribution: '© OpenStreetMap contributors',
+  },
+};
+
+let currentBasemap = 'dark';
+
+function switchBasemap(name) {
+  if (name === currentBasemap) return;
+  currentBasemap = name;
+
+  const bm = BASEMAPS[name];
+
+  // Update tile source
+  map.getSource('carto').setTiles(bm.tiles);
+
+  // Update active button state
+  document.querySelectorAll('.bm-btn').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.bm === name);
+  });
+}
+
+// ── MAIN ────────────────────────────────────────────────────────────────────
+async function main() {
+  setLoad(5, 'INITIALIZING MAP ENGINE...');
+  checkHealth();
+  initMap();
+
+  await new Promise(resolve => map.on('load', resolve));
+  setLoad(10, 'BASE MAP LOADED...');
+
+  // Register custom SVG icons into MapLibre
+  setLoad(12, 'LOADING ICONS...');
+  await registerIcons();
+
+  // Render skeleton layer list while loading
+  LAYERS.forEach(l => { layerStatus[l.id] = 'loading'; layerVisibility[l.id] = true; });
+  renderLayers();
+
+  // Fetch all layers in parallel
+  let done = 0;
+  await Promise.all(LAYERS.map(layer =>
+    fetchLayer(layer).then(geojson => {
+      addLayerToMap(layer, geojson);
+      done++;
+      setLoad(10 + Math.round((done / LAYERS.length) * 85), `LOADED ${layer.label.toUpperCase()}`);
+      renderLayers(); // update count live as each layer arrives
+    })
+  ));
+
+  setLoad(100, 'READY');
+  renderLayers();
+  setTimeout(hideLoad, 300);
+}
+
+main();
+</script>
+</body>
+</html>
